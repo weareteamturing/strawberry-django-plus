@@ -302,6 +302,14 @@ def update(info, instance, data, *, full_clean=True):
         if full_clean:
             instance.full_clean()
 
+        user = info.context.request.user
+        is_creation = instance._state.adding
+        if user.is_authenticated:
+            if is_creation and 'created_by' in fields:
+                instance.created_by = user
+            elif not is_creation and 'modified_by' in fields:
+                instance.modified_by = user
+
         instance.save()
 
         for field, value in m2m:
