@@ -299,9 +299,6 @@ def update(info, instance, data, *, full_clean=True):
         for file_field, value in files:
             file_field.save_form_data(instance, value)
 
-        if full_clean:
-            instance.full_clean()
-
         user = info.context.request.user
         is_creation = instance._state.adding
         if user.is_authenticated:
@@ -309,6 +306,9 @@ def update(info, instance, data, *, full_clean=True):
                 instance.created_by = user
             elif not is_creation and 'modified_by' in fields:
                 instance.modified_by = user
+
+        if full_clean:
+            instance.full_clean()
 
         instance.save()
 
