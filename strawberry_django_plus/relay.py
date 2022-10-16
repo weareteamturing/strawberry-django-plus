@@ -851,7 +851,7 @@ class Connection(Generic[NodeType]):
             expected = end - start
 
         size = first or last or max_results
-        current_page = int(start / size) + 1
+        current_page = (start // size) + 1
         page_cursors: PageCursors = create_page_cursors(
             current_page=current_page,
             size=size,
