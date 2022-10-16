@@ -677,7 +677,7 @@ class PageCursors:
 
 
 def page_to_cursor(page, size):
-    return to_base64(connection_typename, str((page - 1) * size))
+    return to_base64(connection_typename, str((page - 1) * size - 1))
 
 
 def page_to_cursor_object(page, current_page, size) -> PageCursor:
