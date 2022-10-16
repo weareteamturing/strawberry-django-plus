@@ -850,10 +850,11 @@ class Connection(Generic[NodeType]):
             end = start + max_results
             expected = end - start
 
-        current_page = int(start / max_results) + 1
+        size = first or last
+        current_page = int(start / size) + 1
         page_cursors: PageCursors = create_page_cursors(
             current_page=current_page,
-            size=max_results,
+            size=size,
             total_count=total_count
         )
         # Overfetch by 1 to check if we have a next result
