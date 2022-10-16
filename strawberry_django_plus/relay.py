@@ -621,6 +621,107 @@ class Edge(Generic[NodeType]):
         return cls(cursor=to_base64(connection_typename, cursor), node=node)
 
 
+@strawberry.type(description="Pagination Page Info")
+class PageCursor:
+    """Pagination Page Info
+
+    Attributes:
+        cursor:
+            A cursor for use in pagination
+        page:
+            Number of page
+        isCurrent:
+            Page is current page or not
+
+    """
+
+    cursor: str = strawberry.field(
+        description="A cursor for use in pagination",
+    )
+    page: int = strawberry.field(
+        description="Number of page",
+    )
+    is_current: bool = strawberry.field(
+        description="Page is current page or not",
+    )
+
+
+@strawberry.type(description="Pagination Page Info")
+class PageCursors:
+    """Pagination Page Info
+
+    Attributes:
+        first:
+            First Page Info
+        last:
+            Last Page Info
+        around:
+            Around Page Infos
+        previous:
+            Previous Page Info
+
+    """
+
+    first: Optional[PageCursor] = strawberry.field(
+        description="First Page Info", default=None
+    )
+    last: Optional[PageCursor] = strawberry.field(
+        description="Last Page Info", default=None
+    )
+    around: List[PageCursor] = strawberry.field(
+        description="Around Page Infos",
+    )
+    previous: Optional[PageCursor] = strawberry.field(
+        description="Previous Page Info", default=None
+    )
+
+
+def page_to_cursor(page, size):
+    return to_base64(connection_typename, str((page - 1) * size))
+
+
+def page_to_cursor_object(page, current_page, size) -> PageCursor:
+    return PageCursor(
+        cursor=page_to_cursor(page, size),
+        page=page,
+        is_current=current_page == page
+    )
+
+
+def page_cursors_to_array(start, end, current_page, size):
+    return [page_to_cursor_object(page, current_page, size) for page in range(start, end+1)]
+
+
+def compute_total_pages(total_count, size):
+    return math.ceil(total_count / size)
+
+
+def create_page_cursors(current_page, size, total_count, max=5) -> PageCursors:
+    total_pages = compute_total_pages(total_count, size)
+    page_cursors: PageCursors = PageCursors(
+        around=[]
+    )
+    if total_pages == 0:
+        page_cursors.around = [page_to_cursor_object(1, 1, size)]
+    elif total_pages <= max:
+        page_cursors.around = [page_cursors_to_array(1, total_pages, current_page, size)]
+    elif current_page <= math.floor(max / 2) + 1:
+        page_cursors.last = page_to_cursor_object(total_pages, current_page, size)
+        page_cursors.around = page_cursors_to_array(1, max-1, current_page, size)
+    elif current_page >= total_pages - math.floor(max / 2):
+        page_cursors.first = page_to_cursor_object(1, current_page, size)
+        page_cursors.around = page_cursors_to_array(total_pages - max + 2, total_pages, current_page, size)
+    else:
+        offset = math.floor((max-3)/2)
+        page_cursors.first = page_to_cursor_object(1, current_page, size)
+        page_cursors.around = page_cursors_to_array(current_page - offset, current_page + offset, current_page, size)
+        page_cursors.last = page_to_cursor_object(total_pages, current_page, size)
+
+    if current_page > 1 and total_pages > 1:
+        page_cursors.previous = page_to_cursor_object(current_page-1, current_page, size)
+    return page_cursors
+
+
 @strawberry.type(description="A connection to a list of items.")
 class Connection(Generic[NodeType]):
     """A connection to a list of items.
@@ -646,6 +747,9 @@ class Connection(Generic[NodeType]):
     total_count: Optional[int] = strawberry.field(
         description="Total quantity of existing nodes",
         default=None,
+    )
+    page_cursors: PageCursors = strawberry.field(
+        description="For window pagination"
     )
 
     @classmethod
@@ -746,6 +850,12 @@ class Connection(Generic[NodeType]):
             end = start + max_results
             expected = end - start
 
+        current_page = int(start / max_results) + 1
+        page_cursors: PageCursors = create_page_cursors(
+            current_page=current_page,
+            size=max_results,
+            total_count=total_count
+        )
         # Overfetch by 1 to check if we have a next result
         edges = [
             cls.EDGE_CLASS.from_node(v, cursor=start + i)
@@ -770,6 +880,7 @@ class Connection(Generic[NodeType]):
             edges=edges,
             page_info=page_info,
             total_count=total_count,
+            page_cursors=page_cursors,
         )
 
 
