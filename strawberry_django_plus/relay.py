@@ -430,6 +430,7 @@ class Node(abc.ABC):
         after: Optional[str] = None,
         first: Optional[int] = None,
         last: Optional[int] = None,
+        page: Optional[int] = None,
     ) -> AwaitableOrValue["Connection[NodeType]"]:
         """Resolve a connection for this node.
 
@@ -453,6 +454,8 @@ class Node(abc.ABC):
                 Returns the first n items from the list
             last:
                 Returns the items in the list that come after the specified cursor
+            page:
+                Returns page objects
 
         Returns:
             The resolved `Connection`
@@ -472,6 +475,7 @@ class Node(abc.ABC):
                     after=after,
                     first=first,
                     last=last,
+                    page=page,
                 ),
                 info=info,
             )
@@ -486,6 +490,7 @@ class Node(abc.ABC):
             after=after,
             first=first,
             last=last,
+            page=page,
         )
 
     @classmethod
@@ -762,6 +767,7 @@ class Connection(Generic[NodeType]):
         after: Optional[str] = None,
         first: Optional[int] = None,
         last: Optional[int] = None,
+        page: Optional[int] = None,
     ):
         """Resolve a connection from the list of nodes.
 
@@ -784,6 +790,8 @@ class Connection(Generic[NodeType]):
                 Returns the first n items from the list
             last:
                 Returns the items in the list that come after the specified cursor
+            page:
+                Returns specific page objects (with first)
 
         Returns:
             The resolved `Connection`
@@ -806,6 +814,7 @@ class Connection(Generic[NodeType]):
 
         start = 0
         end = total_count if total_count is not None else math.inf
+        size = first or last or max_results
 
         if after:
             after_type, after_parsed = from_base64(after)
@@ -815,6 +824,8 @@ class Connection(Generic[NodeType]):
             before_type, before_parsed = from_base64(before)
             assert before_type == connection_typename
             end = int(before_parsed)
+        if page:
+            start = size * (page-1)
 
         if end is None:
             end = max_results
@@ -850,7 +861,6 @@ class Connection(Generic[NodeType]):
             end = start + max_results
             expected = end - start
 
-        size = first or last or max_results
         current_page = (start // size) + 1
         page_cursors: PageCursors = create_page_cursors(
             current_page=current_page,
@@ -1044,6 +1054,13 @@ class ConnectionField(RelayField):
             graphql_name=None,
             type_annotation=StrawberryAnnotation(Optional[int]),
             description="Returns the items in the list that come after the specified cursor.",
+            default=None,
+        ),
+        "page": StrawberryArgument(
+            python_name="page",
+            graphql_name=None,
+            type_annotation=StrawberryAnnotation(Optional[int]),
+            description="Returns page objects (use with first)",
             default=None,
         ),
     }
