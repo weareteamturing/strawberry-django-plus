@@ -709,7 +709,7 @@ def create_page_cursors(current_page, size, total_count, max=5) -> PageCursors:
     if total_pages == 0:
         page_cursors.around = [page_to_cursor_object(1, 1, size)]
     elif total_pages <= max:
-        page_cursors.around = [page_cursors_to_array(1, total_pages, current_page, size)]
+        page_cursors.around = page_cursors_to_array(1, total_pages, current_page, size)
     elif current_page <= math.floor(max / 2) + 1:
         page_cursors.last = page_to_cursor_object(total_pages, current_page, size)
         page_cursors.around = page_cursors_to_array(1, max-1, current_page, size)
