@@ -161,7 +161,7 @@ def _get_model_hints(
             store |= attr_store.with_prefix(prefix, info=info) if prefix else attr_store
 
         # Lastly, from the django field itself
-        model_fieldname: str = getattr(field, "django_name", field.python_name)
+        model_fieldname: str = getattr(field, "django_name", None) or field.python_name
         model_field = model_fields.get(model_fieldname, None)
         if model_field is not None:
             path = f"{prefix}{model_fieldname}"
@@ -366,7 +366,7 @@ def optimize(
                     config=config,
                 )
                 if new_store is not None:
-                    store |= new_store
+                    store |= new_store  # type:ignore
 
     # Nothing found do optimize, just skip this...
     if not store:
