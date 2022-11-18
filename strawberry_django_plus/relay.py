@@ -434,6 +434,7 @@ class Node(abc.ABC):
         first: Optional[int] = None,
         last: Optional[int] = None,
         page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ) -> AwaitableOrValue["Connection[NodeType]"]:
         """Resolve a connection for this node.
 
@@ -459,6 +460,8 @@ class Node(abc.ABC):
                 Returns the items in the list that come after the specified cursor
             page:
                 Returns page objects
+            page_size:
+                page size
 
         Returns:
             The resolved `Connection`
@@ -479,6 +482,7 @@ class Node(abc.ABC):
                     first=first,
                     last=last,
                     page=page,
+                    page_size=page_size
                 ),
                 info=info,
             )
@@ -494,6 +498,7 @@ class Node(abc.ABC):
             first=first,
             last=last,
             page=page,
+            page_size=page_size,
         )
 
     @classmethod
@@ -630,7 +635,7 @@ class Edge(Generic[NodeType]):
 
 
 @strawberry.type(description="Pagination Page Info")
-class PageCursor:
+class Page:
     """Pagination Page Info
 
     Attributes:
@@ -643,9 +648,6 @@ class PageCursor:
 
     """
 
-    cursor: str = strawberry.field(
-        description="A cursor for use in pagination",
-    )
     page: int = strawberry.field(
         description="Number of page",
     )
@@ -655,7 +657,7 @@ class PageCursor:
 
 
 @strawberry.type(description="Pagination Page Info")
-class PageCursors:
+class Pages:
     """Pagination Page Info
 
     Attributes:
@@ -670,64 +672,68 @@ class PageCursors:
 
     """
 
-    first: Optional[PageCursor] = strawberry.field(
+    first: Optional[Page] = strawberry.field(
         description="First Page Info", default=None
     )
-    last: Optional[PageCursor] = strawberry.field(
+    last: Optional[Page] = strawberry.field(
         description="Last Page Info", default=None
     )
-    around: List[PageCursor] = strawberry.field(
+    around: List[Page] = strawberry.field(
         description="Around Page Infos",
     )
-    previous: Optional[PageCursor] = strawberry.field(
+    previous: Optional[Page] = strawberry.field(
         description="Previous Page Info", default=None
+    )
+    next: Optional[Page] = strawberry.field(
+        description="Next Page Info", default=None
+    )
+    total_count: int = strawberry.field(
+        description="Total Page Count", default=0
     )
 
 
-def page_to_cursor(page, size):
-    return to_base64(connection_typename, str((page - 1) * size - 1))
 
-
-def page_to_cursor_object(page, current_page, size) -> PageCursor:
-    return PageCursor(
-        cursor=page_to_cursor(page, size),
+def page_to_cursor_object(page, current_page) -> Page:
+    return Page(
         page=page,
         is_current=current_page == page
     )
 
 
-def page_cursors_to_array(start, end, current_page, size):
-    return [page_to_cursor_object(page, current_page, size) for page in range(start, end+1)]
+def pages_to_array(start, end, current_page):
+    return [page_to_cursor_object(page, current_page) for page in range(start, end+1)]
 
 
 def compute_total_pages(total_count, size):
     return math.ceil(total_count / size)
 
 
-def create_page_cursors(current_page, size, total_count, max=5) -> PageCursors:
+def create_pages(current_page, size, total_count, max=5) -> Pages:
     total_pages = compute_total_pages(total_count, size)
-    page_cursors: PageCursors = PageCursors(
-        around=[]
+    pages: Pages = Pages(
+        around=[], total_count=size
     )
     if total_pages == 0:
-        page_cursors.around = [page_to_cursor_object(1, 1, size)]
+        pages.around = [page_to_cursor_object(1, 1)]
     elif total_pages <= max:
-        page_cursors.around = page_cursors_to_array(1, total_pages, current_page, size)
+        pages.around = pages_to_array(1, total_pages, current_page)
     elif current_page <= math.floor(max / 2) + 1:
-        page_cursors.last = page_to_cursor_object(total_pages, current_page, size)
-        page_cursors.around = page_cursors_to_array(1, max-1, current_page, size)
+        pages.last = page_to_cursor_object(total_pages, current_page)
+        pages.around = pages_to_array(1, max-1, current_page)
     elif current_page >= total_pages - math.floor(max / 2):
-        page_cursors.first = page_to_cursor_object(1, current_page, size)
-        page_cursors.around = page_cursors_to_array(total_pages - max + 2, total_pages, current_page, size)
+        pages.first = page_to_cursor_object(1, current_page)
+        pages.around = pages_to_array(total_pages - max + 2, total_pages, current_page)
     else:
         offset = math.floor((max-3)/2)
-        page_cursors.first = page_to_cursor_object(1, current_page, size)
-        page_cursors.around = page_cursors_to_array(current_page - offset, current_page + offset, current_page, size)
-        page_cursors.last = page_to_cursor_object(total_pages, current_page, size)
+        pages.first = page_to_cursor_object(1, current_page)
+        pages.around = pages_to_array(current_page - offset, current_page + offset, current_page)
+        pages.last = page_to_cursor_object(total_pages, current_page)
 
     if current_page > 1 and total_pages > 1:
-        page_cursors.previous = page_to_cursor_object(current_page-1, current_page, size)
-    return page_cursors
+        pages.previous = page_to_cursor_object(current_page-1, current_page)
+    if current_page < total_pages:
+        pages.next = page_to_cursor_object(current_page + 1, current_page)
+    return pages
 
 
 @strawberry.type(description="A connection to a list of items.")
@@ -756,7 +762,7 @@ class Connection(Generic[NodeType]):
         description="Total quantity of existing nodes",
         default=None,
     )
-    page_cursors: PageCursors = strawberry.field(
+    pages: Pages = strawberry.field(
         description="For window pagination"
     )
 
@@ -771,6 +777,7 @@ class Connection(Generic[NodeType]):
         first: Optional[int] = None,
         last: Optional[int] = None,
         page: Optional[int] = None,
+        page_size: Optional[int] = None,
     ):
         """Resolve a connection from the list of nodes.
 
@@ -817,7 +824,7 @@ class Connection(Generic[NodeType]):
 
         start = 0
         end = total_count if total_count is not None else math.inf
-        size = first or last or max_results
+        size = page_size or max_results
 
         if after:
             after_type, after_parsed = from_base64(after)
@@ -865,7 +872,7 @@ class Connection(Generic[NodeType]):
             expected = end - start
 
         current_page = (start // size) + 1
-        page_cursors: PageCursors = create_page_cursors(
+        pages: Pages = create_pages(
             current_page=current_page,
             size=size,
             total_count=total_count
@@ -894,7 +901,7 @@ class Connection(Generic[NodeType]):
             edges=edges,
             page_info=page_info,
             total_count=total_count,
-            page_cursors=page_cursors,
+            pages=pages,
         )
 
 
@@ -1063,7 +1070,14 @@ class ConnectionField(RelayField):
             python_name="page",
             graphql_name=None,
             type_annotation=StrawberryAnnotation(Optional[int]),
-            description="Returns page objects (use with first)",
+            description="Returns page objects by this",
+            default=None,
+        ),
+        "page_size": StrawberryArgument(
+            python_name="page_size",
+            graphql_name=None,
+            type_annotation=StrawberryAnnotation(Optional[int]),
+            description="Returns page size",
             default=None,
         ),
     }

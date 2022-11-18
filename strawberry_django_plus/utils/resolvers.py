@@ -456,6 +456,7 @@ def resolve_connection(
     first: Optional[int] = None,
     last: Optional[int] = None,
     page: Optional[int] = None,
+    page_size: Optional[int] = None,
     filter_perms: bool = False,
 ) -> AwaitableOrValue[Connection[NodeType]]:
     """Resolve model connection, ensuring those are prefetched in a sync context.
@@ -517,6 +518,7 @@ def resolve_connection(
                 first=first,
                 last=last,
                 page=page,
+                page_size=page_size,
                 filter_perms=filter_perms,
             ),
         )
@@ -544,7 +546,8 @@ def resolve_connection(
                 after=after,
                 first=first,
                 last=last,
-                page=page
+                page=page,
+                page_size=page_size,
             )
         ),
     )
