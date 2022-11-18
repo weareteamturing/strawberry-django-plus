@@ -711,7 +711,7 @@ def compute_total_pages(total_count, size):
 def create_pages(current_page, size, total_count, max=5) -> Pages:
     total_pages = compute_total_pages(total_count, size)
     pages: Pages = Pages(
-        around=[], total_count=size
+        around=[], total_count=total_pages
     )
     if total_pages == 0:
         pages.around = [page_to_cursor_object(1, 1)]
