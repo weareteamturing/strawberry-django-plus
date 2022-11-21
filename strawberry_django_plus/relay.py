@@ -708,7 +708,7 @@ def compute_total_pages(total_count, size):
     return math.ceil(total_count / size)
 
 
-def create_pages(current_page, size, total_count, max=5) -> Pages:
+def create_pages(current_page, size, total_count, max=7) -> Pages:
     total_pages = compute_total_pages(total_count, size)
     pages: Pages = Pages(
         around=[], total_count=total_pages
