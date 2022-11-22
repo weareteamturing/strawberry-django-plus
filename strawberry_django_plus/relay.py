@@ -837,9 +837,8 @@ class Connection(Generic[NodeType]):
         if page:
             start = size * (page-1)
             end = start + size
-
         if end is None:
-            end = max_results
+            end = size
 
         if isinstance(first, int):
             if first < 0:
