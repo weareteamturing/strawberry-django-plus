@@ -837,8 +837,6 @@ class Connection(Generic[NodeType]):
         if page:
             start = size * (page-1)
             end = start + size
-        if end is None:
-            end = size
 
         if isinstance(first, int):
             if first < 0:
@@ -863,6 +861,8 @@ class Connection(Generic[NodeType]):
         # If at this point end is still inf, consider it to be start + max_results
         if end == math.inf:
             end = start + max_results
+        if page is None and page_size:
+            end = size
 
         expected = end - start
         # If no parameters are given, end could be total_results at this point.
