@@ -300,7 +300,7 @@ def optimize(
             The current field execution info
         config:
             Optional config to use when doing the optimization
-        config:
+        store:
             Optional initial store to use for the optimization
 
     Returns:
@@ -366,7 +366,7 @@ def optimize(
                     config=config,
                 )
                 if new_store is not None:
-                    store |= new_store  # type:ignore
+                    store |= new_store
 
     # Nothing found do optimize, just skip this...
     if not store:
@@ -505,7 +505,8 @@ class OptimizerStore:
                 # In this case, just replace it.
                 if not existing or isinstance(existing, str):
                     to_prefetch[path] = p
-                    abort_only.add(path)
+                    if isinstance(existing, str):
+                        abort_only.add(path)
                     continue
 
                 p1 = PrefetchInspector(existing)
