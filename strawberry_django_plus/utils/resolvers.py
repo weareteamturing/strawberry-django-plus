@@ -26,9 +26,10 @@ from strawberry.utils.await_maybe import AwaitableOrValue
 from strawberry_django.utils import is_async
 from typing_extensions import ParamSpec
 
-from strawberry_django_plus.relay import Connection, GlobalID, Node, NodeType
+from strawberry_django_plus import relay
+from strawberry_django_plus.relay import GlobalID, Node
 
-from .aio import is_awaitable, resolve, resolve_async
+from .aio import is_awaitable, resolve_async
 from .inspect import get_django_type
 
 _T = TypeVar("_T")
@@ -323,6 +324,7 @@ def resolve_model_nodes(
 
     """
     # avoid circular import
+    from strawberry_django_plus import optimizer
     from strawberry_django_plus.permissions import filter_with_perms
 
     if issubclass(source, Model):
@@ -347,7 +349,21 @@ def resolve_model_nodes(
         assert info
         qs = filter_with_perms(qs, info)
 
-    return resolve_result(qs, info=info)
+    qs_resolver = resolve_qs
+    if info is not None:
+        ext = optimizer.optimizer.get()
+        if ext is not None:
+            # If optimizer extension is enabled, optimize this queryset
+            qs = ext.optimize(qs, info=info)
+        # Connection will filter the results when its is being resolved. We don't want to
+        # fetch everything before it does that
+        if isinstance(return_type := info.return_type, type) and issubclass(
+            return_type,
+            relay.Connection,
+        ):
+            qs_resolver = lambda qs: qs
+
+    return resolve_result(qs, info=info, qs_resolver=qs_resolver)
 
 
 @overload
@@ -443,6 +459,7 @@ def resolve_model_id(source: Union[Type[Node], Type[_M]], root: Model) -> Awaita
         return str(root.__dict__[id_attr])
     except KeyError:
         return getattr_str_async_safe(root, id_attr)
+<<<<<<< HEAD
 
 
 def resolve_connection(
@@ -551,3 +568,5 @@ def resolve_connection(
             )
         ),
     )
+=======
+>>>>>>> main

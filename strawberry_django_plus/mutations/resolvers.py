@@ -84,7 +84,7 @@ def _parse_data(info: Info, model: Type[_M], value: Any):
 
             if isinstance(v, ParsedObject):
                 if v.pk is None:
-                    v = cast(_M, create(info, model(), v.data or {}))  # type:ignore
+                    v = cast(_M, create(info, model(), v.data or {}))
                 elif isinstance(v.pk, models.Model) and v.data:
                     v = update(info, v.pk, v.data)
                 else:
@@ -211,7 +211,7 @@ def create(
     if isinstance(data, list):
         return [create(info, model, d, full_clean=full_clean) for d in data]
     elif dataclasses.is_dataclass(data):
-        data = vars(data)
+        data = vars(cast(object, data))
     return update(info, model(), data, full_clean=full_clean)
 
 
@@ -289,6 +289,8 @@ def update(info, instance, data, *, full_clean: Union[bool, FullCleanOptions] = 
             # If value is None, that means we should create the model
             if value is None:
                 value = field.related_model._default_manager.create(**value_data)
+            else:
+                update(info, value, value_data, full_clean=full_clean)
 
         for instance in instances:
             update_field(info, instance, field, value)
@@ -394,6 +396,7 @@ def update_m2m(
             update(info, value, data)
         return
 
+    use_remove = True
     if isinstance(field, ManyToManyField):
         manager = cast("RelatedManager", getattr(instance, field.attname))
     else:
@@ -401,9 +404,13 @@ def update_m2m(
         accessor_name = field.get_accessor_name()
         assert accessor_name
         manager = cast("RelatedManager", getattr(instance, accessor_name))
+        if field.one_to_many:
+            # remove if field is nullable, otherwise delete
+            use_remove = field.remote_field.null is True
 
     to_add = []
     to_remove = []
+    to_delete = []
     need_remove_cache = False
 
     values = value.set if isinstance(value, ParsedObjectList) else value
@@ -455,7 +462,11 @@ def update_m2m(
                 manager.create(**data)
 
         for remaining in existing:
-            to_remove.append(remaining)
+            if use_remove:
+                to_remove.append(remaining)
+            else:
+                to_delete.append(remaining)
+
     else:
         need_remove_cache = need_remove_cache or bool(value.add)
         for v in value.add or []:
@@ -480,6 +491,8 @@ def update_m2m(
         manager.add(*to_add)
     if to_remove:
         manager.remove(*to_remove)
+    if to_delete:
+        manager.filter(pk__in=[item.pk for item in to_delete]).delete()
 
     if need_remove_cache:
         manager._remove_prefetched_objects()  # type:ignore
