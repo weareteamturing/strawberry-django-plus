@@ -302,7 +302,12 @@ class StrawberryDjangoConnectionField(relay.ConnectionField, StrawberryDjangoFie
         return args
 
     @resolvers.async_safe
-    def resolve_connection(self, *args, **kwargs):
+    def resolve_connection(
+        self,
+        *args,
+        **kwargs,
+    ):
+        kwargs = {k: v for k, v in kwargs.items() if k in self.default_args}
         return super().resolve_connection(*args, **kwargs)
 
 
