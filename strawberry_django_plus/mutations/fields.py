@@ -360,7 +360,7 @@ def mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> _T:
     ...
 
@@ -381,7 +381,7 @@ def mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> Any:
     ...
 
@@ -402,7 +402,7 @@ def mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> DjangoInputMutationField:
     ...
 
@@ -422,7 +422,7 @@ def mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
     # This init parameter is used by pyright to determine whether this field
     # is added in the constructor or not. It is not used to change
     # any behavior at the moment.
@@ -478,7 +478,7 @@ def input_mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> _T:
     ...
 
@@ -500,7 +500,7 @@ def input_mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> Any:
     ...
 
@@ -522,7 +522,7 @@ def input_mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> DjangoInputMutationField:
     ...
 
@@ -543,7 +543,7 @@ def input_mutation(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
     # This init parameter is used by pyright to determine whether this field
     # is added in the constructor or not. It is not used to change
     # any behavior at the moment.
@@ -600,7 +600,7 @@ def create(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
     full_clean: bool = True,
 ) -> Any:
     """Create mutation for django input fields.
@@ -654,7 +654,7 @@ def update(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
     full_clean: bool = True,
 ) -> Any:
     """Update mutation for django input fields.
@@ -706,7 +706,7 @@ def delete(
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
     graphql_type: Optional[Any] = None,
-    handle_django_errors: bool = True,
+    handle_django_errors: bool = False,
 ) -> Any:
     return DjangoDeleteMutationField(
         input_type=input_type,
