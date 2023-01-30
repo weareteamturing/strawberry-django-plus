@@ -27,7 +27,6 @@ from django.db.models.fields.related_descriptors import (
     ReverseOneToOneDescriptor,
 )
 from django.db.models.query_utils import DeferredAttribute
-import strawberry
 from strawberry import UNSET
 from strawberry.annotation import StrawberryAnnotation
 from strawberry.arguments import StrawberryArgument
@@ -95,21 +94,7 @@ class StrawberryDjangoField(_StrawberryDjangoField):
             return []
 
         args = super().arguments
-        is_node = isinstance(unwrap_type(self.type), relay.Node)
-        return [
-            (
-                (
-                    argument("ids", List[relay.GlobalID], is_optional=self.is_optional)
-                    if self.is_list
-                    else argument("id", relay.GlobalID, is_optional=self.is_optional)
-                )
-                if is_node
-                and arg.python_name == "pk"
-                and arg.type_annotation.annotation == strawberry.ID
-                else arg
-            )
-            for arg in args
-        ]
+        return [arg for arg in args if arg.python_name != "pk"]
 
     @property
     def type(self) -> Union[StrawberryType, type]:  # noqa:A003
