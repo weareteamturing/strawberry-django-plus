@@ -4,6 +4,7 @@ import base64
 import dataclasses
 import functools
 import inspect
+import itertools
 import math
 import sys
 from typing import (
@@ -556,7 +557,7 @@ class Edge(Generic[NodeType]):
 
 @strawberry.type(description="Pagination Page Info")
 class Page:
-    """Pagination Page Info
+    """Pagination Page Info.
 
     Attributes:
         cursor:
@@ -578,7 +579,7 @@ class Page:
 
 @strawberry.type(description="Pagination Page Info")
 class Pages:
-    """Pagination Page Info
+    """Pagination Page Info.
 
     Attributes:
         first:
@@ -592,65 +593,49 @@ class Pages:
 
     """
 
-    first: Optional[Page] = strawberry.field(
-        description="First Page Info", default=None
-    )
-    last: Optional[Page] = strawberry.field(
-        description="Last Page Info", default=None
-    )
+    first: Optional[Page] = strawberry.field(description="First Page Info", default=None)
+    last: Optional[Page] = strawberry.field(description="Last Page Info", default=None)
     around: List[Page] = strawberry.field(
         description="Around Page Infos",
     )
-    previous: Optional[Page] = strawberry.field(
-        description="Previous Page Info", default=None
-    )
-    next: Optional[Page] = strawberry.field(
-        description="Next Page Info", default=None
-    )
-    total_count: int = strawberry.field(
-        description="Total Page Count", default=0
-    )
-
+    previous: Optional[Page] = strawberry.field(description="Previous Page Info", default=None)
+    next: Optional[Page] = strawberry.field(description="Next Page Info", default=None)  # noqa
+    total_count: int = strawberry.field(description="Total Page Count", default=0)
 
 
 def page_to_cursor_object(page, current_page) -> Page:
-    return Page(
-        page=page,
-        is_current=current_page == page
-    )
+    return Page(page=page, is_current=current_page == page)
 
 
 def pages_to_array(start, end, current_page):
-    return [page_to_cursor_object(page, current_page) for page in range(start, end+1)]
+    return [page_to_cursor_object(page, current_page) for page in range(start, end + 1)]
 
 
 def compute_total_pages(total_count, size):
     return math.ceil(total_count / size)
 
 
-def create_pages(current_page, size, total_count, max=7) -> Pages:
+def create_pages(current_page, size, total_count, _max=7) -> Pages:
     total_pages = compute_total_pages(total_count, size)
-    pages: Pages = Pages(
-        around=[], total_count=total_pages
-    )
+    pages: Pages = Pages(around=[], total_count=total_pages)
     if total_pages == 0:
         pages.around = [page_to_cursor_object(1, 1)]
-    elif total_pages <= max:
+    elif total_pages <= _max:
         pages.around = pages_to_array(1, total_pages, current_page)
-    elif current_page <= math.floor(max / 2) + 1:
+    elif current_page <= math.floor(_max / 2) + 1:
         pages.last = page_to_cursor_object(total_pages, current_page)
-        pages.around = pages_to_array(1, max-1, current_page)
-    elif current_page >= total_pages - math.floor(max / 2):
+        pages.around = pages_to_array(1, _max - 1, current_page)
+    elif current_page >= total_pages - math.floor(_max / 2):
         pages.first = page_to_cursor_object(1, current_page)
-        pages.around = pages_to_array(total_pages - max + 2, total_pages, current_page)
+        pages.around = pages_to_array(total_pages - _max + 2, total_pages, current_page)
     else:
-        offset = math.floor((max-3)/2)
+        offset = math.floor((_max - 3) / 2)
         pages.first = page_to_cursor_object(1, current_page)
         pages.around = pages_to_array(current_page - offset, current_page + offset, current_page)
         pages.last = page_to_cursor_object(total_pages, current_page)
 
     if current_page > 1 and total_pages > 1:
-        pages.previous = page_to_cursor_object(current_page-1, current_page)
+        pages.previous = page_to_cursor_object(current_page - 1, current_page)
     if current_page < total_pages:
         pages.next = page_to_cursor_object(current_page + 1, current_page)
     return pages
@@ -680,9 +665,7 @@ class Connection(Generic[NodeType]):
         description="Total quantity of existing nodes",
         default=None,
     )
-    pages: Pages = strawberry.field(
-        description="For window pagination"
-    )
+    pages: Pages = strawberry.field(description="For window pagination")
 
     @classmethod
     def from_nodes(
@@ -697,6 +680,7 @@ class Connection(Generic[NodeType]):
         last: Optional[int] = None,
         page: Optional[int] = None,
         page_size: Optional[int] = None,
+        **kwargs,
     ):
         """Resolve a connection from the list of nodes.
 
@@ -754,7 +738,7 @@ class Connection(Generic[NodeType]):
             assert before_type == connection_typename
             end = int(before_parsed)
         if page:
-            start = size * (page-1)
+            start = size * (page - 1)
             end = start + size
 
         if isinstance(first, int):
@@ -773,9 +757,19 @@ class Connection(Generic[NodeType]):
                 raise ValueError(f"Argument 'last' cannot be higher than {max_results}.")
 
             if end == math.inf:
-                raise ValueError("Cannot use last with unlimited results")
+                # This is the worst case, someone is asking for last without specifying an
+                # after argument. We basically want the total_count - last in here. If we don't
+                # have the total_count (e.g. because nodes is a generator), the slice below
+                # will have to iterate over it all, so we can transform it to a list here to
+                # retrieve that total_count right now
+                if total_count is None:
+                    nodes = list(nodes)
+                    total_count = len(nodes)
 
-            start = max(start, end - last)
+                start = max(start, total_count - last)
+                end = None
+            else:
+                start = max(start, end - last)
 
         # If at this point end is still inf, consider it to be start + max_results
         if end == math.inf:
@@ -783,7 +777,7 @@ class Connection(Generic[NodeType]):
         if page is None and page_size:
             end = size
 
-        expected = end - start
+        expected = end - start if end is not None else abs(start)
         # If no parameters are given, end could be total_results at this point.
         # Make sure we don't exceed max_results in here
         if expected > max_results:
@@ -791,11 +785,7 @@ class Connection(Generic[NodeType]):
             expected = end - start
 
         current_page = (start // size) + 1
-        pages: Pages = create_pages(
-            current_page=current_page,
-            size=size,
-            total_count=total_count
-        )
+        pages: Pages = create_pages(current_page=current_page, size=size, total_count=total_count)
         # Overfetch by 1 to check if we have a next result
         type_def = cast(TypeDefinition, cls._type_definition)  # type:ignore
         field_def = type_def.get_field("edges")
@@ -806,9 +796,15 @@ class Connection(Generic[NodeType]):
             field = field.of_type
 
         edge_class = cast(Edge[NodeType], field)
+        iterator = (
+            cast(Sequence, nodes)[start : end + 1 if end is not None else None]
+            if hasattr(nodes, "__getitem__")
+            else itertools.islice(
+                nodes, cast(int, start), cast(int, end + 1) if end is not None else None
+            )
+        )
         edges = [
-            edge_class.from_node(v, cursor=start + i)
-            for i, v in enumerate(cast(Sequence, nodes)[start : end + 1])  # noqa:E203
+            edge_class.from_node(v, cursor=start + i) for i, v in enumerate(iterator)  # noqa:E203
         ]
 
         # Remove the overfetched result
@@ -1116,6 +1112,8 @@ class ConnectionField(RelayField):
                 info=info,
             )
 
+        # Avoid info being passed twice in case the custom resolver has one
+        kwargs.pop("info", None)
         return self.resolve_connection(cast(Iterable[Node], nodes), info, **kwargs)
 
     def resolve_connection(
@@ -1125,8 +1123,7 @@ class ConnectionField(RelayField):
         **kwargs,
     ):
         return_type = cast(Connection[Node], info.return_type)
-        kwargs = {k: v for k, v in kwargs.items() if k in self.default_args}
-        return return_type.from_nodes(nodes, info=info, **kwargs)
+        return return_type.from_nodes(nodes, **kwargs)
 
 
 class InputMutationField(RelayField):

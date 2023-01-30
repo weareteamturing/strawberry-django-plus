@@ -27,7 +27,6 @@ from django.db.models.fields.related_descriptors import (
     ReverseOneToOneDescriptor,
 )
 from django.db.models.query_utils import DeferredAttribute
-import strawberry
 from strawberry import UNSET
 from strawberry.annotation import StrawberryAnnotation
 from strawberry.arguments import StrawberryArgument
@@ -95,10 +94,7 @@ class StrawberryDjangoField(_StrawberryDjangoField):
             return []
 
         args = super().arguments
-        return [
-            arg
-            for arg in args if arg.python_name != "pk"
-        ]
+        return [arg for arg in args if arg.python_name != "pk"]
 
     @property
     def type(self) -> Union[StrawberryType, type]:  # noqa:A003
@@ -304,11 +300,15 @@ class StrawberryDjangoConnectionField(relay.ConnectionField, StrawberryDjangoFie
     @resolvers.async_safe
     def resolve_connection(
         self,
-        *args,
+        nodes: QuerySet,
+        info: Info,
         **kwargs,
     ):
-        kwargs = {k: v for k, v in kwargs.items() if k in self.default_args}
-        return super().resolve_connection(*args, **kwargs)
+        return super().resolve_connection(
+            cast(QuerySet, self.get_queryset_as_list(nodes, info, kwargs, skip_fetch=True)),
+            info,
+            **kwargs,
+        )
 
 
 @overload
