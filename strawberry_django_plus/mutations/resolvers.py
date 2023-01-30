@@ -299,6 +299,14 @@ def update(info, instance, data, *, full_clean: Union[bool, FullCleanOptions] = 
         for file_field, value in files:
             file_field.save_form_data(instance, value)
 
+        user = info.context.request.user
+        is_creation = instance._state.adding
+        if user.is_authenticated:
+            if is_creation and "created_by" in fields:
+                instance.created_by = user
+            elif not is_creation and "modified_by" in fields:
+                instance.modified_by = user
+
         full_clean_options = full_clean if isinstance(full_clean, dict) else {}
         if full_clean:
             instance.full_clean(**full_clean_options)
