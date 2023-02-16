@@ -27,7 +27,6 @@ from django.db.models.fields.related_descriptors import (
     ReverseOneToOneDescriptor,
 )
 from django.db.models.query_utils import DeferredAttribute
-import strawberry
 from strawberry import UNSET
 from strawberry.annotation import StrawberryAnnotation
 from strawberry.arguments import StrawberryArgument
@@ -95,10 +94,7 @@ class StrawberryDjangoField(_StrawberryDjangoField):
             return []
 
         args = super().arguments
-        return [
-            arg
-            for arg in args if arg.python_name != "pk"
-        ]
+        return [arg for arg in args if arg.python_name != "pk"]
 
     @property
     def type(self) -> Union[StrawberryType, type]:  # noqa:A003
@@ -285,49 +281,34 @@ class StrawberryDjangoNodeField(relay.NodeField, StrawberryDjangoField):
 
 
 class StrawberryDjangoConnectionField(relay.ConnectionField, StrawberryDjangoField):
-    def __init__(self, *args, **kwargs):
-        self._force_is_list_as_true = False
-        super().__init__(*args, **kwargs)
-
     @property
     def arguments(self) -> List[StrawberryArgument]:
-        # FIXME: The order/filters/etc arguments will only be added if there's no base_resolver
-        # defined, but for Connections the resolver will resolve the iterable and not the field
-        # return value itself. How to handle this in a better way?
-        base_resolver = self._base_resolver
-        self._base_resolver = None
-        self._force_is_list_as_true = True
         args = super().arguments
-        if base_resolver is not None:
-            args += base_resolver.arguments
-        self._base_resolver = base_resolver
-        self._force_is_list_as_true = False
+
+        # NOTE: Because we have a base_resolver defined, our parents will not add
+        # order/filters resolvers in here, so we need to add them by hand (unless they
+        # are somewhat in there). We are not adding pagination because it doesn't make
+        # sense together with a Connection
+        args_names = [a.python_name for a in args]
+        if "order" not in args_names and (order := self.get_order()) not in (None, UNSET):
+            args.append(argument("order", order))
+        if "filters" not in args_names and (filters := self.get_filters()) not in (None, UNSET):
+            args.append(argument("filters", filters))
+
         return args
 
-    def is_list(self):
-        if self._force_is_list_as_true:
-            return True
-        return super().is_list
-
-    def resolve_nodes(
+    @resolvers.async_safe
+    def resolve_connection(
         self,
-        source: Any,
+        nodes: QuerySet,
         info: Info,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        *,
-        nodes: Optional[QuerySet[Any]] = None,
+        **kwargs,
     ):
-        if nodes is None:
-            nodes = self.model._default_manager.all()
-
-            if self.origin_django_type and hasattr(self.origin_django_type.origin, "get_queryset"):
-                nodes = cast(
-                    QuerySet[Any],
-                    self.origin_django_type.origin.get_queryset(nodes, info),
-                )
-
-        return self.get_queryset_as_list(nodes, info, kwargs, skip_fetch=True)
+        return super().resolve_connection(
+            cast(QuerySet, self.get_queryset_as_list(nodes, info, kwargs, skip_fetch=True)),
+            info,
+            **kwargs,
+        )
 
 
 @overload
@@ -345,6 +326,7 @@ def field(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     pagination: Optional[bool] = UNSET,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
@@ -370,6 +352,7 @@ def field(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     pagination: Optional[bool] = UNSET,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
@@ -395,6 +378,7 @@ def field(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     pagination: Optional[bool] = UNSET,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
@@ -419,6 +403,7 @@ def field(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     pagination: Optional[bool] = UNSET,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
@@ -449,7 +434,7 @@ def field(
         python_name=None,
         django_name=field_name,
         graphql_name=name,
-        type_annotation=None,
+        type_annotation=StrawberryAnnotation.from_annotation(graphql_type),
         description=description,
         is_subscription=is_subscription,
         permission_classes=permission_classes or [],
@@ -482,6 +467,7 @@ def node(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     only: Optional[TypeOrSequence[str]] = None,
     select_related: Optional[TypeOrSequence[str]] = None,
     prefetch_related: Optional[TypeOrSequence[PrefetchType]] = None,
@@ -515,7 +501,7 @@ def node(
     return StrawberryDjangoNodeField(
         python_name=None,
         graphql_name=name,
-        type_annotation=None,
+        type_annotation=StrawberryAnnotation.from_annotation(graphql_type),
         description=description,
         is_subscription=is_subscription,
         permission_classes=permission_classes or [],
@@ -545,6 +531,7 @@ def connection(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
     only: Optional[TypeOrSequence[str]] = None,
@@ -568,6 +555,7 @@ def connection(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
     only: Optional[TypeOrSequence[str]] = None,
@@ -591,6 +579,7 @@ def connection(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
     only: Optional[TypeOrSequence[str]] = None,
@@ -613,6 +602,7 @@ def connection(
     default_factory: Union[Callable[..., object], object] = dataclasses.MISSING,
     metadata: Optional[Mapping[Any, Any]] = None,
     directives: Optional[Sequence[object]] = (),
+    graphql_type: Optional[Any] = None,
     filters: Optional[type] = UNSET,
     order: Optional[type] = UNSET,
     only: Optional[TypeOrSequence[str]] = None,
@@ -677,7 +667,7 @@ def connection(
     f = StrawberryDjangoConnectionField(
         python_name=None,
         graphql_name=name,
-        type_annotation=None,
+        type_annotation=StrawberryAnnotation.from_annotation(graphql_type),
         description=description,
         is_subscription=is_subscription,
         permission_classes=permission_classes or [],
